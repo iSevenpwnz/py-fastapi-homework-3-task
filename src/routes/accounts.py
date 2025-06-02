@@ -15,7 +15,10 @@ from database import (
     PasswordResetTokenModel,
     RefreshTokenModel,
 )
-from database.validators.accounts import validate_password_strength, validate_email
+from database.validators.accounts import (
+    validate_password_strength,
+    validate_email,
+)
 from exceptions import BaseSecurityError, TokenExpiredError
 from security.interfaces import JWTAuthManagerInterface
 from schemas import (
@@ -48,7 +51,9 @@ router = APIRouter()
 async def register(
     user: UserRegistrationRequestSchema, db: AsyncSession = Depends(get_db)
 ) -> UserRegistrationResponseSchema:
-    existing = await db.scalar(select(UserModel).where((UserModel.email == user.email)))
+    existing = await db.scalar(
+        select(UserModel).where((UserModel.email == user.email))
+    )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -57,8 +62,15 @@ async def register(
     try:
         hashed = hash_password(user.password)
         group = await db.scalar(
-            select(UserGroupModel).where(UserGroupModel.name == UserGroupEnum.USER)
+            select(UserGroupModel).where(
+                UserGroupModel.name == UserGroupEnum.USER
+            )
         )
+        if group is None:
+            raise HTTPException(
+                status_code=500,
+                detail="User group USER not found in the database. Please contact administrator.",
+            )
         db_user = UserModel(
             email=user.email, _hashed_password=hashed, group_id=group.id
         )
@@ -70,8 +82,7 @@ async def register(
         db.add(activation_token)
         await db.commit()
         return UserRegistrationResponseSchema(
-            id=db_user.id,
-            email=db_user.email
+            id=db_user.id, email=db_user.email
         )
     except Exception:
         await db.rollback()
@@ -112,7 +123,10 @@ async def activate_user(
         )
 
     token_obj = user.activation_token
-    if token_obj.token != data.token or token_obj.expires_at < datetime.utcnow():
+    if (
+        token_obj.token != data.token
+        or token_obj.expires_at < datetime.utcnow()
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired activation token.",
@@ -122,7 +136,9 @@ async def activate_user(
     await db.delete(token_obj)
     await db.commit()
 
-    return MessageResponseSchema(message="User account activated successfully.")
+    return MessageResponseSchema(
+        message="User account activated successfully."
+    )
 
 
 @router.post(
@@ -169,11 +185,14 @@ async def reset_password(
     responses={
         200: {"description": "Password reset successfully."},
         400: {"description": "Invalid email or token."},
-        500: {"description": "An error occurred while resetting the password."},
+        500: {
+            "description": "An error occurred while resetting the password."
+        },
     },
 )
 async def reset_password_complete(
-    data: PasswordResetCompleteRequestSchema, db: AsyncSession = Depends(get_db)
+    data: PasswordResetCompleteRequestSchema,
+    db: AsyncSession = Depends(get_db),
 ) -> MessageResponseSchema:
     stmt = (
         select(UserModel)
@@ -184,16 +203,21 @@ async def reset_password_complete(
 
     if not user or not user.is_active or not user.password_reset_token:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or token."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or token.",
         )
 
     token_obj = user.password_reset_token
 
-    if token_obj.token != data.token or token_obj.expires_at < datetime.utcnow():
+    if (
+        token_obj.token != data.token
+        or token_obj.expires_at < datetime.utcnow()
+    ):
         await db.delete(token_obj)
         await db.commit()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or token."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or token.",
         )
 
     try:
@@ -218,7 +242,9 @@ async def reset_password_complete(
     responses={
         401: {"description": "Invalid email or password."},
         403: {"description": "User account is not activated."},
-        500: {"description": "An error occurred while processing the request."},
+        500: {
+            "description": "An error occurred while processing the request."
+        },
     },
 )
 async def login(
@@ -293,11 +319,13 @@ async def refresh(
         token = jwt_manager.decode_refresh_token(data.refresh_token)
     except TokenExpiredError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Token has expired."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token has expired.",
         )
     if not token:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Token has expired."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token has expired.",
         )
 
     stmt = select(RefreshTokenModel).where(
@@ -306,7 +334,8 @@ async def refresh(
     refresh_token = await db.scalar(stmt)
     if not refresh_token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token not found."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found.",
         )
 
     try:
